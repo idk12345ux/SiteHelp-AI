@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>SiteHelp AI — Website Building Assistant</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #0b0b0f;
+    color: #f0f0f5;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 14px 16px;
+    border-bottom: 1px solid #1e1e26;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { font-size: 17px; font-weight: 700; }
+  header h1 span { color: #6ee7ff; }
+  #keyBtn {
+    background: #1e1e26;
+    color: #9a9aa5;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .bubble {
+    max-width: 85%;
+    padding: 10px 13px;
+    border-radius: 14px;
+    line-height: 1.45;
+    font-size: 14.5px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .me { align-self: flex-end; background: #6ee7ff; color: #05141a; border-bottom-right-radius: 4px; }
+  .ai { align-self: flex-start; background: #1a1a22; color: #eaeaf0; border-bottom-left-radius: 4px; }
+  .ai pre {
+    background: #0e0e13;
+    border: 1px solid #2a2a35;
+    border-radius: 8px;
+    padding: 10px;
+    overflow-x: auto;
+    font-size: 13px;
+    margin: 6px 0;
+  }
+  .ai code { font-family: 'SF Mono', Menlo, monospace; }
+  .typing { align-self: flex-start; color: #6b6b78; font-size: 13px; padding: 4px 13px; }
+  #inputRow {
+    display: flex;
+    padding: 10px;
+    gap: 8px;
+    border-top: 1px solid #1e1e26;
+  }
+  #msgInput {
+    flex: 1;
+    background: #1a1a22;
+    border: 1px solid #2a2a35;
+    color: #fff;
+    padding: 11px 14px;
+    border-radius: 22px;
+    font-size: 15px;
+    outline: none;
+  }
+  #sendBtn {
+    background: #6ee7ff;
+    color: #05141a;
+    border: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 22px;
+    font-size: 18px;
+    font-weight: 700;
+  }
+  #sendBtn:disabled { opacity: 0.4; }
+  .empty {
+    color: #6b6b78;
+    font-size: 14px;
+    text-align: center;
+    margin-top: 40px;
+    line-height: 1.6;
+    padding: 0 20px;
+  }
+  #keyModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 10;
+  }
+  #keyModal.hidden { display: none; }
+  .modalBox {
+    background: #16161c;
+    border-radius: 14px;
+    padding: 20px;
+    max-width: 360px;
+    width: 100%;
+  }
+  .modalBox h2 { font-size: 16px; margin-bottom: 8px; }
+  .modalBox p { font-size: 13px; color: #9a9aa5; margin-bottom: 12px; line-height: 1.5; }
+  .modalBox input {
+    width: 100%;
+    background: #0e0e13;
+    border: 1px solid #2a2a35;
+    color: #fff;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  .modalBox button {
+    width: 100%;
+    background: #6ee7ff;
+    color: #05141a;
+    border: none;
+    padding: 11px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .modalBox a { color: #6ee7ff; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Site<span>Help</span> AI</h1>
+  <button id="keyBtn" onclick="showKeyModal()">API Key</button>
+</header>
+
+<div id="chat">
+  <div class="empty" id="emptyMsg">
+    Ask me anything about building websites — HTML/CSS/JS, layout ideas, fixing bugs,
+    picking a stack, or paste code and I'll improve it.
+  </div>
+</div>
+
+<div id="inputRow">
+  <input id="msgInput" type="text" placeholder="Ask about your website..." onkeydown="if(event.key==='Enter')sendMsg()" />
+  <button id="sendBtn" onclick="sendMsg()">➤</button>
+</div>
+
+<div id="keyModal" class="hidden">
+  <div class="modalBox">
+    <h2>Add your free Groq API key</h2>
+    <p>Sign up free at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>,
+    create a key, and paste it here. It's stored only on this device.</p>
+    <input id="keyInput" type="text" placeholder="gsk_..." />
+    <button onclick="saveKey()">Save</button>
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY = 'sitehelp_groq_key';
+  const HISTORY_KEY = 'sitehelp_history';
+  let apiKey = localStorage.getItem(STORAGE_KEY) || '';
+  let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+
+  const chatEl = document.getElementById('chat');
+  const emptyMsg = document.getElementById('emptyMsg');
+  const sendBtn = document.getElementById('sendBtn');
+  const msgInput = document.getElementById('msgInput');
+
+  const SYSTEM_PROMPT = `You are SiteHelp AI, a friendly expert assistant for building websites.
+Give clear, practical, beginner-friendly advice about HTML, CSS, JavaScript, hosting,
+domains, design, and common frameworks. When code is helpful, give complete, working
+code snippets in fenced code blocks. Keep explanations concise unless asked to go deeper.
+If asked for something outside web development, gently redirect back to website help.`;
+
+  function showKeyModal() {
+    document.getElementById('keyModal').classList.remove('hidden');
+    document.getElementById('keyInput').value = apiKey;
+  }
+  function saveKey() {
+    apiKey = document.getElementById('keyInput').value.trim();
+    localStorage.setItem(STORAGE_KEY, apiKey);
+    document.getElementById('keyModal').classList.add('hidden');
+  }
+
+  function renderHistory() {
+    if (history.length > 0) emptyMsg.style.display = 'none';
+    chatEl.querySelectorAll('.bubble').forEach(el => el.remove());
+    history.forEach(m => addBubble(m.role, m.content, false));
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  function formatContent(text) {
+    return text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.trim()}</code></pre>`)
+      .replace(/\n/g, '<br>');
+  }
+
+  function addBubble(role, content, scroll = true) {
+    const div = document.createElement('div');
+    div.className = 'bubble ' + (role === 'user' ? 'me' : 'ai');
+    div.innerHTML = role === 'user'
+      ? content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      : formatContent(content);
+    chatEl.insertBefore(div, document.getElementById('typingIndicator') || null);
+    if (scroll) chatEl.scrollTop = chatEl.scrollHeight;
+    return div;
+  }
+
+  async function sendMsg() {
+    const text = msgInput.value.trim();
+    if (!text) return;
+    if (!apiKey) { showKeyModal(); return; }
+
+    emptyMsg.style.display = 'none';
+    addBubble('user', text);
+    history.push({ role: 'user', content: text });
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    msgInput.value = '';
+    sendBtn.disabled = true;
+
+    const typing = document.createElement('div');
+    typing.className = 'typing';
+    typing.id = 'typingIndicator';
+    typing.textContent = 'SiteHelp is thinking...';
+    chatEl.appendChild(typing);
+    chatEl.scrollTop = chatEl.scrollHeight;
+
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            ...history.slice(-10),
+          ],
+          temperature: 0.6,
+        }),
+      });
+      const data = await res.json();
+      typing.remove();
+
+      if (data.error) {
+        addBubble('assistant', `⚠️ ${data.error.message || 'Something went wrong. Check your API key.'}`);
+      } else {
+        const reply = data.choices[0].message.content;
+        addBubble('assistant', reply);
+        history.push({ role: 'assistant', content: reply });
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      }
+    } catch (err) {
+      typing.remove();
+      addBubble('assistant', '⚠️ Network error. Check your internet connection and try again.');
+    }
+    sendBtn.disabled = false;
+  }
+
+  if (!apiKey) setTimeout(showKeyModal, 400);
+  renderHistory();
+</script>
+
+</body>
+</html>
